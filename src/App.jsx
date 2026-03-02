@@ -4,6 +4,7 @@ import { loginRequest } from './authConfig';
 import {
   loadTrainingData,
   getValuesForDate,
+  getLastEntriesPerExercise,
   updateRange,
   colLetter,
 } from './graphService';
@@ -37,7 +38,7 @@ function SaveIndicator({ state }) {
 }
 
 // ── Exercise Card ───────────────────────────────────────────────
-function ExerciseCard({ exercise, value, dateExists, saving, onSave }) {
+function ExerciseCard({ exercise, value, dateExists, saving, onSave, lastEntry }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [val, setVal] = useState(value);
 
@@ -79,6 +80,15 @@ function ExerciseCard({ exercise, value, dateExists, saving, onSave }) {
         ))}
       </div>
 
+      {lastEntry && (
+        <div className="last-entry">
+          <span className="last-entry-icon">↩</span>
+          <span className="last-entry-date">{formatDate(lastEntry.date)}</span>
+          <span className="last-entry-sep">·</span>
+          <span className="last-entry-value">{lastEntry.value}</span>
+        </div>
+      )}
+
       <div className="ex-input-wrap">
         <input
           className="ex-input"
@@ -116,6 +126,7 @@ export default function App() {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [actValues, setActValues] = useState({});
   const [exValues, setExValues] = useState({});
+  const [lastEntries, setLastEntries] = useState({});
   const [saving, setSaving] = useState({});
   const [actCollapsed, setActCollapsed] = useState(false);
 
@@ -161,12 +172,13 @@ export default function App() {
     if (!dateCol) {
       setActValues({});
       setExValues({});
-      return;
+    } else {
+      const { activityValues, exerciseValues } = getValuesForDate(rawRows, dateCol.col);
+      setActValues(activityValues);
+      setExValues(exerciseValues);
     }
-    const { activityValues, exerciseValues } = getValuesForDate(rawRows, dateCol.col);
-    setActValues(activityValues);
-    setExValues(exerciseValues);
-  }, [rawRows, dates, selectedDate]);
+    setLastEntries(getLastEntriesPerExercise(rawRows, dates, exercises, selectedDate));
+  }, [rawRows, dates, selectedDate, exercises]);
 
   // ── Auto-load on auth ─────────────────────────────────────
   useEffect(() => {
@@ -198,7 +210,7 @@ export default function App() {
     setSaving((s) => ({ ...s, [key]: 'saving' }));
     try {
       const token = await getToken();
-      await updateRange(token, cellAddr, [[value || null]]);
+      await updateRange(token, cellAddr, [[value]]);
       setSaving((s) => ({ ...s, [key]: 'saved' }));
       setTimeout(() => setSaving((s) => ({ ...s, [key]: null })), 1500);
     } catch (e) {
@@ -369,6 +381,7 @@ export default function App() {
                   saveCell(ex.row, val, `ex-${ex.row}`);
                   setExValues((v) => ({ ...v, [ex.row]: val }));
                 }}
+                lastEntry={lastEntries[ex.row]}
               />
             ))}
             {filteredExercises.length === 0 && (

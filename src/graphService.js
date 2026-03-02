@@ -178,6 +178,34 @@ export async function loadTrainingData(token) {
   return { dates, activityLabels, exercises, plans, rawRows: rows };
 }
 
+// ── Find last entry per exercise (excluding the selected date) ───
+export function getLastEntriesPerExercise(rawRows, dates, exercises, selectedDate) {
+  const result = {};
+
+  // Sort dates descending, skip the currently selected date
+  const sortedDates = [...dates]
+    .filter(d => {
+      const dt = d.date;
+      const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      return iso !== selectedDate;
+    })
+    .sort((a, b) => b.date - a.date);
+
+  for (const ex of exercises) {
+    const arrayRow = ex.row - 3;
+    for (const d of sortedDates) {
+      const colIdx = d.col - 1;
+      const val = rawRows[arrayRow]?.[colIdx];
+      if (val !== null && val !== undefined && val !== '' && val !== false) {
+        const display = isExcelDate(val) ? excelDateToDisplay(val) : String(val);
+        result[ex.row] = { date: d.date, value: display };
+        break;
+      }
+    }
+  }
+  return result;
+}
+
 // ── Load values for a specific date column ──────────────────────
 export function getValuesForDate(rawRows, dateCol) {
   const colIdx = dateCol - 1; // 0-indexed

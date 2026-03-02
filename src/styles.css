@@ -471,6 +471,33 @@ input, button, textarea {
 .ex-input:disabled { opacity: 0.4; }
 .ex-input::placeholder { color: var(--text-muted); }
 
+/* ── Last entry ────────────────────────────────── */
+.last-entry {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.last-entry-icon {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.last-entry-date {
+  color: var(--text-muted);
+}
+
+.last-entry-sep {
+  color: var(--text-muted);
+}
+
+.last-entry-value {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
 /* ── Save indicator ────────────────────────────── */
 .save-ind {
   font-size: 16px;
