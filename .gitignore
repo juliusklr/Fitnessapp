@@ -3,3 +3,8 @@ dist
 .env
 .env.local
 .claude/
+
+# Local migration artifacts (contain personal data / local paths — keep out of the public repo)
+_dev.log
+_migration.sql
+_*.py

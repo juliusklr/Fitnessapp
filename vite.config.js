@@ -9,11 +9,11 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
-        name: 'Training Tracker',
+        name: 'Training',
         short_name: 'Training',
-        description: 'Track your workouts and sync with Excel',
-        theme_color: '#0a0a0f',
-        background_color: '#0a0a0f',
+        description: 'Trainingsbibliothek, Pläne und Log',
+        theme_color: '#ffffff',
+        background_color: '#ffffff',
         display: 'standalone',
         orientation: 'portrait',
         icons: [
