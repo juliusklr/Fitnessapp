@@ -479,26 +479,18 @@ function DashboardTab({ log }) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  AUTH SCREEN (Supabase magic-link)
+//  AUTH SCREEN (Supabase email + password)
 // ═══════════════════════════════════════════════════════════════
 function AuthScreen() {
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [state, setState] = useState(null); // 'sending' | 'sent' | 'verifying' | 'error'
+  const [password, setPassword] = useState('');
+  const [state, setState] = useState(null); // 'sending' | 'error'
   const [msg, setMsg] = useState('');
 
-  const send = async () => {
-    if (!email) return;
+  const login = async () => {
+    if (!email || !password) return;
     setState('sending'); setMsg('');
-    const { error } = await supabase.auth.signInWithOtp({ email });
-    if (error) { setState('error'); setMsg(error.message); }
-    else setState('sent');
-  };
-
-  const verify = async () => {
-    if (!code) return;
-    setState('verifying'); setMsg('');
-    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setState('error'); setMsg(error.message); }
     // success: onAuthStateChange picks up the session automatically
   };
@@ -508,29 +500,16 @@ function AuthScreen() {
       <div className="glass auth">
         <div className="mark">T</div>
         <h1>Training</h1>
-        {state === 'sent' || state === 'verifying' ? (
-          <>
-            <p>Code an <b>{email}</b> gesendet. Trag ihn hier ein.</p>
-            <input className="in flex" inputMode="numeric" autoComplete="one-time-code" value={code}
-              onChange={(e) => setCode(e.target.value)} placeholder="123456" autoFocus
-              onKeyDown={(e) => e.key === 'Enter' && verify()} />
-            <button className="btn-primary" disabled={!code || state === 'verifying'} onClick={verify}>
-              {state === 'verifying' ? 'Prüfen…' : 'Anmelden'}
-            </button>
-            {state === 'error' && <p className="err">{msg}</p>}
-          </>
-        ) : (
-          <>
-            <p>Gib deine E-Mail ein — wir schicken dir einen Code, kein Passwort nötig.</p>
-            <input className="in flex" type="email" inputMode="email" autoComplete="email" value={email}
-              onChange={(e) => setEmail(e.target.value)} placeholder="deine@email.de"
-              onKeyDown={(e) => e.key === 'Enter' && send()} />
-            <button className="btn-primary" disabled={!email || state === 'sending'} onClick={send}>
-              {state === 'sending' ? 'Senden…' : 'Code senden'}
-            </button>
-            {state === 'error' && <p className="err">{msg}</p>}
-          </>
-        )}
+        <p>Anmelden mit E-Mail und Passwort.</p>
+        <input className="in flex" type="email" inputMode="email" autoComplete="email" value={email}
+          onChange={(e) => setEmail(e.target.value)} placeholder="deine@email.de" />
+        <input className="in flex" type="password" autoComplete="current-password" value={password}
+          onChange={(e) => setPassword(e.target.value)} placeholder="Passwort"
+          onKeyDown={(e) => e.key === 'Enter' && login()} />
+        <button className="btn-primary" disabled={!email || !password || state === 'sending'} onClick={login}>
+          {state === 'sending' ? 'Anmelden…' : 'Anmelden'}
+        </button>
+        {state === 'error' && <p className="err">{msg}</p>}
       </div>
     </div>
   );
