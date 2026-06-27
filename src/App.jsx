@@ -141,7 +141,7 @@ function ExerciseLogCard({ item, libEntry, last, loggedToday, onLog }) {
   );
 }
 
-function WorkoutTab({ plans, libMap, log, selectedDate, setSelectedDate, recentDates, onLog }) {
+function WorkoutTab({ plans, libMap, log, selectedDate, setSelectedDate, onLog }) {
   const [planName, setPlanName] = useState(plans[0]?.name);
   useEffect(() => { if (!plans.find((p) => p.name === planName)) setPlanName(plans[0]?.name); }, [plans]);
   const plan = plans.find((p) => p.name === planName);
@@ -149,11 +149,6 @@ function WorkoutTab({ plans, libMap, log, selectedDate, setSelectedDate, recentD
   return (
     <div className="tab-body">
       <input type="date" className="date-input" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
-      <div className="chips">
-        {recentDates.map((d) => (
-          <button key={d} className={`chip ${d === selectedDate ? 'on' : ''}`} onClick={() => setSelectedDate(d)}>{fmtDate(d)}</button>
-        ))}
-      </div>
       <div className="chips wrap">
         {plans.map((p) => (
           <button key={p.name} className={`chip ${p.name === planName ? 'on' : ''}`} onClick={() => setPlanName(p.name)}>{p.name}</button>
@@ -555,12 +550,6 @@ export default function App() {
     if (acts.length) base.push({ name: 'Aktivität', items: acts.map((a) => ({ uebung: a })) });
     return base;
   }, [plans, log]);
-  const recentDates = useMemo(() => {
-    const set = new Set(log.map((r) => r.datum).filter(Boolean));
-    set.add(selectedDate);
-    return [...set].sort().slice(-12);
-  }, [log, selectedDate]);
-
   // ── Mutations ──
   const handleLog = async (row) => {
     const saved = await addLogRow(row);
@@ -606,7 +595,7 @@ export default function App() {
       </header>
 
       <main className="main">
-        {tab === 'workout' && <WorkoutTab plans={workoutPlans} libMap={libMap} log={log} selectedDate={selectedDate} setSelectedDate={setSelectedDate} recentDates={recentDates} onLog={handleLog} />}
+        {tab === 'workout' && <WorkoutTab plans={workoutPlans} libMap={libMap} log={log} selectedDate={selectedDate} setSelectedDate={setSelectedDate} onLog={handleLog} />}
         {tab === 'dashboard' && <DashboardTab log={log} />}
         {tab === 'plans' && <PlansTab plans={plans} library={lib} onSave={handleSavePlan} onDelete={handleDeletePlan} />}
         {tab === 'library' && <LibraryTab library={lib} onAdd={handleAddLib} onUpdate={handleUpdateLib} onDelete={handleDeleteLib} />}
