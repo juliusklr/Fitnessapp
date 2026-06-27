@@ -185,13 +185,13 @@ function WorkoutTab({ plans, libMap, log, selectedDate, setSelectedDate, recentD
 // ═══════════════════════════════════════════════════════════════
 //  PLANS TAB
 // ═══════════════════════════════════════════════════════════════
-function SortableExercise({ it, i, upd, setGroup, setRunden, onRemove }) {
+function SortableExercise({ it, i, groupPos, upd, setGroup, setRunden, onRemove }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: it._id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.65 : 1, zIndex: isDragging ? 20 : undefined, position: 'relative' };
   return (
     <div className="card" ref={setNodeRef} style={style}>
       <div className="ex-head">
-        <h3>{it.gruppe && <span className="ss-chip">{it.gruppe}</span>}{it.uebung}</h3>
+        <h3>{it.gruppe && <span className="ss-chip">{it.gruppe}{groupPos}</span>}{it.uebung}</h3>
         <div className="reorder">
           <button className="drag-handle" ref={setActivatorNodeRef} {...attributes} {...listeners} aria-label="Verschieben"><IconGrip /></button>
           <button onClick={onRemove} aria-label="Entfernen"><IconTrash /></button>
@@ -260,10 +260,16 @@ function PlanEditor({ plan, library, onSave, onCancel }) {
       </div>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={items.map((x) => x._id)} strategy={verticalListSortingStrategy}>
-          {items.map((it, i) => (
-            <SortableExercise key={it._id} it={it} i={i} upd={upd} setGroup={setGroup} setRunden={setRunden}
-              onRemove={() => setItems((s) => s.filter((_, j) => j !== i))} />
-          ))}
+          {(() => {
+            const groupCounts = {};
+            return items.map((it, i) => {
+              const groupPos = it.gruppe ? (groupCounts[it.gruppe] = (groupCounts[it.gruppe] || 0) + 1) : null;
+              return (
+                <SortableExercise key={it._id} it={it} i={i} groupPos={groupPos} upd={upd} setGroup={setGroup} setRunden={setRunden}
+                  onRemove={() => setItems((s) => s.filter((_, j) => j !== i))} />
+              );
+            });
+          })()}
         </SortableContext>
       </DndContext>
       <button className="add-set" onClick={() => setPicking(true)}><IconPlus /> Übung hinzufügen</button>
@@ -575,6 +581,7 @@ export default function App() {
   const handleUpdateLib = async (id, d) => {
     const saved = await updateExercise(id, d);
     setLib((prev) => prev.map((x) => (x.id === id ? saved : x)).sort((a, b) => a.uebung.localeCompare(b.uebung)));
+    if ('uebung' in d) setPlans(await getPlans()); // name change must propagate to cached plan items
   };
   const handleDeleteLib = async (id) => {
     await deleteExercise(id);
