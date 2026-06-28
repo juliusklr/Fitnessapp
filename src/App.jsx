@@ -154,6 +154,7 @@ function WorkoutTab({ plans, libMap, log, selectedDate, setSelectedDate, onLog }
           <button key={p.name} className={`chip ${p.name === planName ? 'on' : ''}`} onClick={() => setPlanName(p.name)}>{p.name}</button>
         ))}
       </div>
+      {plan?.notiz && <div className="cue-box">{plan.notiz}</div>}
       {plan && buildBlocks(plan.items).map((b, bi) => {
         const cards = b.items.map((it, ii) => {
           const key = `${bi}-${ii}-${it.uebung}`;
@@ -214,6 +215,7 @@ function PlanEditor({ plan, library, onSave, onCancel }) {
   const idRef = useRef(0);
   const newId = () => ++idRef.current;
   const [name, setName] = useState(plan?.name || '');
+  const [notiz, setNotiz] = useState(plan?.notiz || '');
   const [items, setItems] = useState(() => (plan?.items || []).map((it) => ({ _id: newId(), ...it })));
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState('');
@@ -253,6 +255,7 @@ function PlanEditor({ plan, library, onSave, onCancel }) {
         <button className="icon-btn" onClick={onCancel}><IconBack /></button>
         <input className="in flex" value={name} onChange={(e) => setName(e.target.value)} placeholder="Planname" />
       </div>
+      <textarea className="in note-in" rows={2} value={notiz} onChange={(e) => setNotiz(e.target.value)} placeholder="Notiz zum Plan…" />
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={items.map((x) => x._id)} strategy={verticalListSortingStrategy}>
           {(() => {
@@ -268,7 +271,7 @@ function PlanEditor({ plan, library, onSave, onCancel }) {
         </SortableContext>
       </DndContext>
       <button className="add-set" onClick={() => setPicking(true)}><IconPlus /> Übung hinzufügen</button>
-      <button className="btn-primary" disabled={!name || saving} onClick={async () => { setSaving(true); try { await onSave({ id: plan?.id, name, items }); } catch (e) { alert(e.message); setSaving(false); } }}>
+      <button className="btn-primary" disabled={!name || saving} onClick={async () => { setSaving(true); try { await onSave({ id: plan?.id, name, notiz, items }); } catch (e) { alert(e.message); setSaving(false); } }}>
         {saving ? 'Speichern…' : 'Plan speichern'}
       </button>
     </div>

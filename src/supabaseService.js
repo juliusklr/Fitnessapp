@@ -97,7 +97,7 @@ export async function getPlans() {
   const { data, error } = await supabase
     .from('plans')
     .select(
-      'id, name, position, created_at, ' +
+      'id, name, notiz, position, created_at, ' +
         'plan_items(id, exercise_id, position, gruppe, runden, ziel_saetze, ziel_wdh, tempo, pause, notiz, exercise:exercises(name))'
     )
     .order('created_at');
@@ -105,6 +105,7 @@ export async function getPlans() {
   return (data || []).map((p) => ({
     id: p.id,
     name: p.name,
+    notiz: s(p.notiz),
     items: (p.plan_items || [])
       .sort((a, b) => (a.position || 0) - (b.position || 0))
       .map(mapItem),
@@ -112,15 +113,15 @@ export async function getPlans() {
 }
 
 // Create or replace a plan and all its items in one go.
-export async function savePlan({ id, name, items }) {
+export async function savePlan({ id, name, notiz, items }) {
   let planId = id;
   if (planId) {
-    const { error } = await supabase.from('plans').update({ name }).eq('id', planId);
+    const { error } = await supabase.from('plans').update({ name, notiz: notiz || null }).eq('id', planId);
     fail(error, 'savePlan(update)');
     const { error: delErr } = await supabase.from('plan_items').delete().eq('plan_id', planId);
     fail(delErr, 'savePlan(clear items)');
   } else {
-    const { data, error } = await supabase.from('plans').insert({ name }).select('id').single();
+    const { data, error } = await supabase.from('plans').insert({ name, notiz: notiz || null }).select('id').single();
     fail(error, 'savePlan(insert)');
     planId = data.id;
   }
