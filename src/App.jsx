@@ -6,7 +6,7 @@ import { supabase } from './supabaseClient';
 import {
   getExercises, addExercise, updateExercise, deleteExercise,
   getPlans, savePlan, deletePlan,
-  getLog, addLogRow, lastSession, exportToExcel,
+  getLog, addLogRow, deleteLogRow, lastSession, exportToExcel,
 } from './supabaseService';
 
 // ── Date helpers ────────────────────────────────────────────────
@@ -78,7 +78,7 @@ function ActivityCard({ item, last, onLog }) {
 
 const fmtSet = (s) => (`${num(s.gewicht)}${s.gewicht ? '×' : ''}${num(s.wdh)}`.trim() || num(s.dauer) || s.notiz || '');
 
-function ExerciseLogCard({ item, libEntry, last, loggedToday, onLog }) {
+function ExerciseLogCard({ item, libEntry, last, loggedToday, onLog, onDeleteLog }) {
   const planNote = item.notiz && item.notiz !== 'None' ? item.notiz : '';
   const cues = libEntry?.cues && libEntry.cues !== 'None' ? libEntry.cues : '';
   const [showCues, setShowCues] = useState(false);
@@ -124,11 +124,13 @@ function ExerciseLogCard({ item, libEntry, last, loggedToday, onLog }) {
       {loggedToday.length > 0 && (
         <div className="logged">
           {loggedToday.map((s, i) => (
-            <div className="logged-row" key={i}>
+            <div className="logged-row" key={s.id || i}>
               <span className="set-n">{s.satz || i + 1}</span>
               <span className="logged-val">{fmtSet(s) || '–'}</span>
               {s.rpe && <span className="logged-rpe">RPE {s.rpe}</span>}
               {s.notiz && <span className="logged-note">{s.notiz}</span>}
+              <button className="logged-del" title="Satz löschen"
+                onClick={() => { if (confirm('Diesen Satz löschen?')) onDeleteLog(s.id); }}>✕</button>
             </div>
           ))}
         </div>
@@ -150,7 +152,7 @@ function ExerciseLogCard({ item, libEntry, last, loggedToday, onLog }) {
   );
 }
 
-function WorkoutTab({ plans, libMap, log, selectedDate, setSelectedDate, onLog }) {
+function WorkoutTab({ plans, libMap, log, selectedDate, setSelectedDate, onLog, onDeleteLog }) {
   const [planName, setPlanName] = useState(plans[0]?.name);
   useEffect(() => { if (!plans.find((p) => p.name === planName)) setPlanName(plans[0]?.name); }, [plans]);
   const plan = plans.find((p) => p.name === planName);
@@ -172,7 +174,7 @@ function WorkoutTab({ plans, libMap, log, selectedDate, setSelectedDate, onLog }
           const loggedToday = log
             .filter((r) => r.uebung === it.uebung && r.datum === selectedDate && r.plan === plan.name)
             .sort((a, b2) => (parseInt(a.satz) || 0) - (parseInt(b2.satz) || 0));
-          return <ExerciseLogCard key={key} libEntry={libMap.get(it.uebung)} loggedToday={loggedToday} {...common} />;
+          return <ExerciseLogCard key={key} libEntry={libMap.get(it.uebung)} loggedToday={loggedToday} onDeleteLog={onDeleteLog} {...common} />;
         });
         if (!b.gruppe) return cards;
         return (
@@ -567,6 +569,10 @@ export default function App() {
     const saved = await addLogRow(row);
     setLog((prev) => [...prev, saved]); // optimistic; avoids a full refetch
   };
+  const handleDeleteLog = async (id) => {
+    await deleteLogRow(id);
+    setLog((prev) => prev.filter((r) => r.id !== id));
+  };
   const handleSavePlan = async (p) => { await savePlan(p); setPlans(await getPlans()); };
   const handleDeletePlan = async (id) => { await deletePlan(id); setPlans(await getPlans()); };
   const handleAddLib = async (e) => {
@@ -607,7 +613,7 @@ export default function App() {
       </header>
 
       <main className="main">
-        {tab === 'workout' && <WorkoutTab plans={workoutPlans} libMap={libMap} log={log} selectedDate={selectedDate} setSelectedDate={setSelectedDate} onLog={handleLog} />}
+        {tab === 'workout' && <WorkoutTab plans={workoutPlans} libMap={libMap} log={log} selectedDate={selectedDate} setSelectedDate={setSelectedDate} onLog={handleLog} onDeleteLog={handleDeleteLog} />}
         {tab === 'dashboard' && <DashboardTab log={log} />}
         {tab === 'plans' && <PlansTab plans={plans} library={lib} onSave={handleSavePlan} onDelete={handleDeletePlan} />}
         {tab === 'library' && <LibraryTab library={lib} onAdd={handleAddLib} onUpdate={handleUpdateLib} onDelete={handleDeleteLib} />}

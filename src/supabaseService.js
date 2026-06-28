@@ -199,6 +199,11 @@ export async function addLogRow(row) {
   return mapLog(data);
 }
 
+export async function deleteLogRow(id) {
+  const { error } = await supabase.from('log_sets').delete().eq('id', id);
+  fail(error, 'deleteLogRow');
+}
+
 // ── Most recent logged session for an exercise, before a given date ──
 // Matches by exercise name (already resolved to the current name in mapLog),
 // so renames keep history attached.
