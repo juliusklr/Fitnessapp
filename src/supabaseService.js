@@ -132,7 +132,7 @@ export async function savePlan({ id, name, notiz, items }) {
       position: i + 1,
       gruppe: it.gruppe || null,
       runden: toInt(it.runden),
-      ziel_saetze: toInt(it.zielSaetze),
+      ziel_saetze: it.zielSaetze || null,
       ziel_wdh: it.zielWdh || null,
       tempo: it.tempo || null,
       pause: it.pause || null,

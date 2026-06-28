@@ -8,3 +8,8 @@ dist
 _dev.log
 _migration.sql
 _*.py
+_*.sql
+_backup_*.json
+err.log
+# Local working material (source docx, transcripts, generated SQL/JSON) — keep out of the public repo
+Input/

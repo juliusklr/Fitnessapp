@@ -79,8 +79,9 @@ function ActivityCard({ item, last, onLog }) {
 const fmtSet = (s) => (`${num(s.gewicht)}${s.gewicht ? '×' : ''}${num(s.wdh)}`.trim() || num(s.dauer) || s.notiz || '');
 
 function ExerciseLogCard({ item, libEntry, last, loggedToday, onLog }) {
-  const note = (item.notiz && item.notiz !== 'None' ? item.notiz : '')
-    || (libEntry?.cues && libEntry.cues !== 'None' ? libEntry.cues : '');
+  const planNote = item.notiz && item.notiz !== 'None' ? item.notiz : '';
+  const cues = libEntry?.cues && libEntry.cues !== 'None' ? libEntry.cues : '';
+  const [showCues, setShowCues] = useState(false);
   const seed = last?.sets?.[0];
   const [g, setG] = useState(seed?.gewicht || '');
   const [w, setW] = useState(seed?.wdh || item.zielWdh || '');
@@ -110,7 +111,15 @@ function ExerciseLogCard({ item, libEntry, last, loggedToday, onLog }) {
       <div className="ex-head"><h3>{item.uebung}</h3></div>
       {target && <div className="target">{target}</div>}
       {lastTxt && <div className="last">zuletzt {fmtDate(last.datum)} · {lastTxt}</div>}
-      {note && <div className="cue-box">{note.split('\n').map((l, i) => <p key={i}>{l.replace(/^- /, '• ')}</p>)}</div>}
+      {planNote && <div className="cue-box">{planNote.split('\n').map((l, i) => <p key={i}>{l.replace(/^- /, '• ')}</p>)}</div>}
+      {cues && (
+        <div className="cues-wrap">
+          <button className="cues-toggle" onClick={() => setShowCues((s) => !s)} aria-expanded={showCues}>
+            <span className="cues-caret">{showCues ? '▾' : '▸'}</span> Cues
+          </button>
+          {showCues && <div className="cue-box">{cues.split('\n').map((l, i) => <p key={i}>{l.replace(/^- /, '• ')}</p>)}</div>}
+        </div>
+      )}
 
       {loggedToday.length > 0 && (
         <div className="logged">

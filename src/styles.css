@@ -118,6 +118,10 @@ h3 { font-size: 16px; letter-spacing: -0.01em; }
 .cue-btn { width: 28px; height: 28px; flex-shrink: 0; border-radius: 8px; border: 1px solid var(--line-2); background: #fff; color: var(--ink-2); font-size: 13px; font-style: italic; font-weight: 700; cursor: pointer; }
 .cue-box { margin-top: 12px; background: var(--field); border-radius: 10px; padding: 12px 14px; }
 .cue-box p { color: var(--ink-2); font-size: 13px; line-height: 1.55; margin: 1px 0; }
+.cues-wrap { margin-top: 10px; }
+.cues-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 5px 2px; background: none; border: none; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.cues-toggle .cues-caret { font-size: 10px; color: var(--accent); }
+.cues-wrap .cue-box { margin-top: 6px; }
 
 /* ── Supersets ── */
 .superset { background: var(--field); border-radius: var(--r); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
