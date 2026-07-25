@@ -31,15 +31,11 @@ jobs:
       - name: Download SDK and device files
         run: |
           set -x
-          MGR=$(command -v connect-iq-sdk-manager || command -v connect-iq-sdk-manager-cli)
-          "$MGR" agreement --help || true
-          "$MGR" sdk --help || true
-          "$MGR" device --help || true
-          yes | "$MGR" agreement accept || "$MGR" agreement accept --yes || true
-          "$MGR" sdk set latest
-          "$MGR" device download --device epix2 --device epix2pro42mm --device epix2pro47mm --device epix2pro51mm \
-            || "$MGR" device download epix2 epix2pro42mm epix2pro47mm epix2pro51mm \
-            || "$MGR" device download
+          MGR="$HOME/ciq-bin/connect-iq-sdk-manager"
+          "$MGR" agreement accept
+          "$MGR" sdk list || true
+          "$MGR" sdk set '>=6.0.0'
+          "$MGR" device download -m garmin/manifest.xml
           find "$HOME/.Garmin" -maxdepth 4 | head -50 || true
 
       - name: Inject Supabase credentials
@@ -61,7 +57,7 @@ jobs:
       - name: Build
         run: |
           set -x
-          MGR=$(command -v connect-iq-sdk-manager || command -v connect-iq-sdk-manager-cli)
+          MGR="$HOME/ciq-bin/connect-iq-sdk-manager"
           SDK=$("$MGR" sdk current-path 2>/dev/null || true)
           if [ -z "$SDK" ]; then SDK=$(find "$HOME/.Garmin/ConnectIQ/Sdks" -mindepth 1 -maxdepth 1 -type d | head -1); fi
           echo "SDK at: $SDK"
