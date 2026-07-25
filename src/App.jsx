@@ -823,6 +823,18 @@ export default function App() {
   const [log, setLog] = useState([]);
   const [tab, setTab] = useState('dashboard');
   const [selectedDate, setSelectedDate] = useState(isoDate(new Date()));
+  const [kbOpen, setKbOpen] = useState(false);
+
+  // iOS pinnt position:fixed an den Layout-Viewport: bei offener Tastatur
+  // schwimmt die Tabbar sonst beim Scrollen mitten im Bild.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onChange = () => setKbOpen(window.innerHeight - vv.height > 100);
+    vv.addEventListener('resize', onChange);
+    vv.addEventListener('scroll', onChange);
+    return () => { vv.removeEventListener('resize', onChange); vv.removeEventListener('scroll', onChange); };
+  }, []);
 
   // ── Auth session ──
   useEffect(() => {
@@ -918,7 +930,7 @@ export default function App() {
         {tab === 'library' && <LibraryTab library={lib} onAdd={handleAddLib} onUpdate={handleUpdateLib} onDelete={handleDeleteLib} />}
       </main>
 
-      <nav className="tabbar glass">
+      <nav className={`tabbar glass${kbOpen ? ' kb-hidden' : ''}`}>
         <button className={tab === 'dashboard' ? 'on' : ''} onClick={() => setTab('dashboard')}><IconChart /><span>Übersicht</span></button>
         <button className={tab === 'workout' ? 'on' : ''} onClick={() => setTab('workout')}><IconDumbbell /><span>Workout</span></button>
         <button className={tab === 'planung' ? 'on' : ''} onClick={() => setTab('planung')}><IconCal /><span>Planung</span></button>
