@@ -121,19 +121,13 @@ export async function loadTrainingData(token) {
           dateObj = parsed;
         }
       }
-      
-      // Debug: log first few date values
-      if (c < 12) {
-        console.log(`Date col ${c}: raw="${v}" (${typeof v}) → parsed=${dateObj?.toISOString()}`);
-      }
-      
+
       if (dateObj && !isNaN(dateObj.getTime()) && dateObj.getFullYear() > 2000) {
         dates.push({ col: c + 1, date: dateObj });
       }
     }
   }
   dates.sort((a, b) => a.date - b.date);
-  console.log(`Found ${dates.length} dates, range: ${dates[0]?.date?.toISOString()} - ${dates[dates.length-1]?.date?.toISOString()}`);
 
   // Rows 1-11 in array = Rows 4-14 in sheet (daily activities)
   const activityLabels = [];
@@ -172,8 +166,6 @@ export async function loadTrainingData(token) {
   }
 
   const plans = [...planSet].sort();
-  console.log(`Found ${exercises.length} exercises, plans:`, plans);
-  console.log(`Total rows in response: ${rows.length}, total cols: ${rows[0]?.length}`);
 
   return { dates, activityLabels, exercises, plans, rawRows: rows };
 }
