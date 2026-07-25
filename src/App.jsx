@@ -647,10 +647,12 @@ function LibraryTab({ library, onAdd, onUpdate, onDelete }) {
 // ═══════════════════════════════════════════════════════════════
 //  DASHBOARD TAB
 // ═══════════════════════════════════════════════════════════════
+// isoDate (lokal) statt toISOString (UTC): sonst kippt das Datum in
+// Zeitzonen östlich von UTC auf den Vortag und keine Woche matcht mehr.
 const mondayOf = (iso) => {
   const d = new Date(iso + 'T00:00:00');
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
-  return d.toISOString().slice(0, 10);
+  return isoDate(d);
 };
 const lastNWeeks = (n) => {
   const out = [];
@@ -658,7 +660,7 @@ const lastNWeeks = (n) => {
   base.setDate(base.getDate() - ((base.getDay() + 6) % 7));
   for (let i = n - 1; i >= 0; i--) {
     const w = new Date(base); w.setDate(base.getDate() - i * 7);
-    out.push(w.toISOString().slice(0, 10));
+    out.push(isoDate(w));
   }
   return out;
 };
