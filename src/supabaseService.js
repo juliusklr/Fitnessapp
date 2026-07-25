@@ -1,5 +1,7 @@
 // Supabase data layer. Replaces the old Microsoft-Graph/Excel service.
-// Tables: exercises · plans · plan_items · log_sets (see BACKEND_PLAN.md).
+// Tables: exercises · programs · phases · plans (= Trainingstage) · plan_items
+// · log_sets · schedule_entries · weekly_pattern (see BACKEND_PLAN.md).
+// Hierarchie: programs (Trainingspläne) → phases → plans (Tage) → plan_items.
 // RLS scopes every row to owner = auth.uid(); owner is set by column default.
 import { supabase } from './supabaseClient';
 
@@ -78,8 +80,10 @@ export async function deleteExercise(id) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-//  PLANS (plans + plan_items)
+//  PROGRAMS (programs → phases → plans/Tage + plan_items)
 // ═══════════════════════════════════════════════════════════════
+const byPos = (a, b) => (a.position || 0) - (b.position || 0);
+
 const mapItem = (r) => ({
   id: r.id,
   exercise_id: r.exercise_id,
@@ -93,27 +97,71 @@ const mapItem = (r) => ({
   notiz: s(r.notiz),
 });
 
-export async function getPlans() {
+const mapDay = (p) => ({
+  id: p.id,
+  name: p.name,
+  notiz: s(p.notiz),
+  position: p.position || 0,
+  items: (p.plan_items || []).sort(byPos).map(mapItem),
+});
+
+// Whole hierarchy in one query: programs → phases → days → items.
+export async function getPrograms() {
   const { data, error } = await supabase
-    .from('plans')
+    .from('programs')
     .select(
-      'id, name, notiz, position, created_at, ' +
-        'plan_items(id, exercise_id, position, gruppe, runden, ziel_saetze, ziel_wdh, tempo, pause, notiz, exercise:exercises(name))'
+      'id, name, notiz, position, created_at, phases(id, name, notiz, position, created_at, ' +
+        'plans(id, name, notiz, position, created_at, ' +
+        'plan_items(id, exercise_id, position, gruppe, runden, ziel_saetze, ziel_wdh, tempo, pause, notiz, exercise:exercises(name))))'
     )
-    .order('created_at');
-  fail(error, 'getPlans');
-  return (data || []).map((p) => ({
-    id: p.id,
-    name: p.name,
-    notiz: s(p.notiz),
-    items: (p.plan_items || [])
-      .sort((a, b) => (a.position || 0) - (b.position || 0))
-      .map(mapItem),
+    .order('position');
+  fail(error, 'getPrograms');
+  return (data || []).map((pr) => ({
+    id: pr.id,
+    name: pr.name,
+    notiz: s(pr.notiz),
+    position: pr.position || 0,
+    phases: (pr.phases || []).sort(byPos).map((ph) => ({
+      id: ph.id,
+      name: ph.name,
+      notiz: s(ph.notiz),
+      position: ph.position || 0,
+      days: (ph.plans || []).sort(byPos).map(mapDay),
+    })),
   }));
 }
 
-// Create or replace a plan and all its items in one go.
-export async function savePlan({ id, name, notiz, items }) {
+export async function saveProgram({ id, name, notiz }) {
+  const row = { name, notiz: notiz || null };
+  const q = id
+    ? supabase.from('programs').update(row).eq('id', id)
+    : supabase.from('programs').insert(row);
+  const { error } = await q;
+  fail(error, 'saveProgram');
+}
+
+export async function deleteProgram(id) {
+  const { error } = await supabase.from('programs').delete().eq('id', id); // cascades phases → days → items
+  fail(error, 'deleteProgram');
+}
+
+export async function savePhase({ id, program_id, name, notiz, position }) {
+  const row = { name, notiz: notiz || null };
+  if (position !== undefined) row.position = position;
+  let q;
+  if (id) q = supabase.from('phases').update(row).eq('id', id);
+  else q = supabase.from('phases').insert({ ...row, program_id });
+  const { error } = await q;
+  fail(error, 'savePhase');
+}
+
+export async function deletePhase(id) {
+  const { error } = await supabase.from('phases').delete().eq('id', id); // cascades days → items
+  fail(error, 'deletePhase');
+}
+
+// Create or replace a day (plan) and all its items in one go.
+export async function savePlan({ id, phase_id, name, notiz, position, items }) {
   let planId = id;
   if (planId) {
     const { error } = await supabase.from('plans').update({ name, notiz: notiz || null }).eq('id', planId);
@@ -121,7 +169,11 @@ export async function savePlan({ id, name, notiz, items }) {
     const { error: delErr } = await supabase.from('plan_items').delete().eq('plan_id', planId);
     fail(delErr, 'savePlan(clear items)');
   } else {
-    const { data, error } = await supabase.from('plans').insert({ name, notiz: notiz || null }).select('id').single();
+    const { data, error } = await supabase
+      .from('plans')
+      .insert({ name, notiz: notiz || null, phase_id, position: position ?? 0 })
+      .select('id')
+      .single();
     fail(error, 'savePlan(insert)');
     planId = data.id;
   }
@@ -156,6 +208,7 @@ const mapLog = (r) => ({
   id: r.id,
   datum: s(r.datum),
   plan: s(r.plan_name),
+  plan_id: r.plan_id || null,
   exercise_id: r.exercise_id,
   // current name follows renames; falls back to the snapshot for deleted exercises
   uebung: r.exercise?.name || s(r.exercise_name),
@@ -171,7 +224,7 @@ export async function getLog() {
   const { data, error } = await supabase
     .from('log_sets')
     .select(
-      'id, datum, plan_name, exercise_id, exercise_name, satz, gewicht, wdh, dauer, rpe, notiz, exercise:exercises(name)'
+      'id, datum, plan_name, plan_id, exercise_id, exercise_name, satz, gewicht, wdh, dauer, rpe, notiz, exercise:exercises(name)'
     )
     .order('datum');
   fail(error, 'getLog');
@@ -184,6 +237,7 @@ export async function addLogRow(row) {
     .insert({
       datum: row.datum,
       plan_name: row.plan || null,
+      plan_id: row.plan_id || null,
       exercise_id: row.exercise_id || null,
       exercise_name: row.uebung,
       satz: toInt(row.satz),
@@ -193,7 +247,7 @@ export async function addLogRow(row) {
       rpe: toNum(row.rpe),
       notiz: row.notiz || null,
     })
-    .select('id, datum, plan_name, exercise_id, exercise_name, satz, gewicht, wdh, dauer, rpe, notiz')
+    .select('id, datum, plan_name, plan_id, exercise_id, exercise_name, satz, gewicht, wdh, dauer, rpe, notiz')
     .single();
   fail(error, 'addLogRow');
   return mapLog(data);
@@ -215,6 +269,49 @@ export function lastSession(log, uebung, beforeISO) {
     .filter((r) => r.datum === maxDate)
     .sort((a, b) => (parseInt(a.satz) || 0) - (parseInt(b.satz) || 0));
   return { datum: maxDate, sets };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SCHEDULE (schedule_entries + weekly_pattern)
+// ═══════════════════════════════════════════════════════════════
+// Auflösung für ein Datum: expliziter Eintrag gewinnt (plan_id null =
+// bewusst trainingsfrei), sonst greift das Wochenmuster (weekday 0 = Montag).
+
+export async function getSchedule() {
+  const [entriesRes, patternRes] = await Promise.all([
+    supabase.from('schedule_entries').select('id, datum, plan_id, notiz').order('datum'),
+    supabase.from('weekly_pattern').select('id, weekday, plan_id'),
+  ]);
+  fail(entriesRes.error, 'getSchedule(entries)');
+  fail(patternRes.error, 'getSchedule(pattern)');
+  return {
+    entries: (entriesRes.data || []).map((r) => ({ id: r.id, datum: s(r.datum), plan_id: r.plan_id, notiz: s(r.notiz) })),
+    pattern: (patternRes.data || []).map((r) => ({ id: r.id, weekday: r.weekday, plan_id: r.plan_id })),
+  };
+}
+
+// planId: uuid = Trainingstag, null = explizit frei (überschreibt Muster).
+export async function setScheduleEntry(datum, planId) {
+  const { error: delErr } = await supabase.from('schedule_entries').delete().eq('datum', datum);
+  fail(delErr, 'setScheduleEntry(clear)');
+  const { error } = await supabase.from('schedule_entries').insert({ datum, plan_id: planId });
+  fail(error, 'setScheduleEntry');
+}
+
+// Eintrag entfernen → Datum fällt zurück aufs Wochenmuster.
+export async function clearScheduleEntry(datum) {
+  const { error } = await supabase.from('schedule_entries').delete().eq('datum', datum);
+  fail(error, 'clearScheduleEntry');
+}
+
+// planId null = Wochentag im Muster frei lassen (Zeile löschen).
+export async function setPatternDay(weekday, planId) {
+  const { error: delErr } = await supabase.from('weekly_pattern').delete().eq('weekday', weekday);
+  fail(delErr, 'setPatternDay(clear)');
+  if (planId) {
+    const { error } = await supabase.from('weekly_pattern').insert({ weekday, plan_id: planId });
+    fail(error, 'setPatternDay');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════

@@ -36,9 +36,10 @@ Die App läuft dann unter `http://localhost:5173`
 
 ## Funktionen
 
-- 📅 **Datumsauswahl** – Standard: heute, Quick-Chips für die letzten Tage
+- 📅 **Datumsauswahl** – Standard: heute
 - 🏃 **Tägliche Aktivitäten** – Run, Bike, VB, DGR, Mob, etc.
-- 💪 **Trainingsplan-Auswahl** – zwischen deinen Plänen wechseln
+- 💪 **Plan-Hierarchie** – Trainingsplan → Phase → Tag, Auswahl per Kaskade im Workout
+- 🗓️ **Planung** – Wochenansicht: Trainingstage auf Kalendertage legen, plus Wochenmuster als Standard; der Workout-Tab wählt den geplanten Tag automatisch vor
 - 📝 **Übungs-Tracking** – Freitexteingabe pro Übung mit Sätzen, Wiederholungen, Timing, Pause
 - ☁️ **Direkte Excel-Sync** – Daten werden sofort in OneDrive geschrieben
 - 📱 **PWA** – installierbar als Home-Screen-App

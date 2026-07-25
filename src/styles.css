@@ -207,6 +207,34 @@ h3 { font-size: 16px; letter-spacing: -0.01em; }
 .legend { font-size: 11px; color: var(--ink-3); margin-top: 10px; }
 .select-bare { background: var(--field); border: none; border-radius: 8px; padding: 7px 10px; font-size: 13px; font-weight: 600; color: var(--ink); outline: none; max-width: 60%; }
 
+/* ── Workout: Kaskaden-Auswahl + Schedule-Hinweis ── */
+.chips.sub .chip { padding: 7px 12px; font-size: 12.5px; }
+.sched-hint { background: var(--accent-soft); color: var(--accent); font-weight: 600; font-size: 13px; padding: 10px 13px; border-radius: var(--r-sm); }
+
+/* ── Pläne: Phasen-Blöcke ── */
+.phase-block { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.phase-head { display: flex; align-items: center; justify-content: space-between; }
+.phase-edit { background: none; border: none; color: var(--ink-3); font-size: 14px; cursor: pointer; padding: 4px 8px; }
+
+/* ── Planung: Wochenansicht + Muster ── */
+.week-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.week-label { flex: 1; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.week-label strong { font-family: var(--disp); font-size: 16px; }
+.icon-btn.flip svg { transform: rotate(180deg); }
+.today-btn { background: none; border: none; color: var(--accent); font-weight: 600; font-size: 12px; cursor: pointer; padding: 2px; }
+.sched-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 13px 14px; background: #fff; border: 1px solid var(--line); border-radius: var(--r-sm); cursor: pointer; font-size: 14px; text-align: left; transition: border-color .15s var(--ease); }
+.sched-row:active { border-color: var(--accent); }
+.sched-row.today { border-color: var(--accent); }
+.sched-day { width: 46px; flex-shrink: 0; display: flex; flex-direction: column; font-weight: 700; font-family: var(--disp); font-size: 14px; }
+.sched-day em { font-style: normal; font-size: 10.5px; color: var(--ink-3); font-weight: 600; }
+.sched-val { flex: 1; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-val.set { color: var(--ink); font-weight: 600; }
+.sched-val.free { font-style: italic; }
+.sched-src { flex-shrink: 0; font-size: 9.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); background: var(--field); padding: 3px 7px; border-radius: 6px; }
+.sched-row.plain { border: none; border-radius: 0; border-bottom: 1px solid var(--line); padding: 11px 2px; background: none; }
+.sched-row.plain:last-child { border-bottom: none; }
+.picker-group { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+
 /* ── Misc ── */
 .dot { font-size: 14px; font-weight: 700; }
 .dot-saving { color: var(--ink-3); } .dot-saved { color: var(--ok); } .dot-error { color: var(--err); }

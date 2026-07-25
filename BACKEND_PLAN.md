@@ -1,5 +1,12 @@
 # Backend-Umstieg: Excel → Supabase
 
+> **Update (Juli 2026):** Umgesetzt, plus Erweiterung um die Plan-Hierarchie und Schedule:
+> - `programs` (Trainingspläne) → `phases` → `plans` (= Trainingstage, via `plans.phase_id`) → `plan_items`
+> - `log_sets.plan_id` referenziert den Trainingstag (Name bleibt Snapshot in `plan_name`)
+> - `schedule_entries` (ein Eintrag pro Datum; `plan_id null` = explizit trainingsfrei) und
+>   `weekly_pattern` (`weekday` 0 = Montag; Standard je Wochentag). Auflösung: expliziter Eintrag schlägt Muster.
+> Der Rest dieses Dokuments beschreibt den ursprünglichen Entwurf.
+
 Entwurf des Datenmodells und Migrationsplans. **Noch nichts umgesetzt** — erst zum Durchschauen.
 
 ---

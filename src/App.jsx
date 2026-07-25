@@ -5,7 +5,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { supabase } from './supabaseClient';
 import {
   getExercises, addExercise, updateExercise, deleteExercise,
-  getPlans, savePlan, deletePlan,
+  getPrograms, saveProgram, deleteProgram, savePhase, deletePhase, savePlan, deletePlan,
+  getSchedule, setScheduleEntry, clearScheduleEntry, setPatternDay,
   getLog, addLogRow, deleteLogRow, lastSession, exportToExcel,
 } from './supabaseService';
 
@@ -19,6 +20,22 @@ const fmtDate = (iso) => {
   const dt = new Date(iso + (iso.length === 10 ? 'T00:00:00' : ''));
   return dt.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
 };
+const WD = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'];
+const WD_LONG = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'];
+const weekdayOf = (iso) => (new Date(iso + 'T00:00:00').getDay() + 6) % 7; // 0 = Montag
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return isoDate(d); };
+
+// Geplanter Trainingstag für ein Datum: expliziter Eintrag schlägt Wochenmuster.
+// plan_id null bei source 'entry' = bewusst trainingsfrei.
+function resolveScheduled(schedule, iso) {
+  const e = schedule.entries.find((x) => x.datum === iso);
+  if (e) return { source: 'entry', plan_id: e.plan_id };
+  const p = schedule.pattern.find((x) => x.weekday === weekdayOf(iso));
+  if (p) return { source: 'pattern', plan_id: p.plan_id };
+  return null;
+}
+
+const AKT = '__aktivitaet__'; // Pseudo-Programm für Aktivitäten aus dem Log
 
 // ── Icons (inline, stroke) ──────────────────────────────────────
 const Icon = ({ d, fill }) => (
@@ -31,6 +48,7 @@ const IconDumbbell = () => <Icon d={<><path d="M6.5 6.5l11 11" /><path d="M3 8l2
 const IconPlan = () => <Icon d={<><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></>} />;
 const IconBook = () => <Icon d={<><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 19V5" /></>} />;
 const IconChart = () => <Icon d={<><path d="M5 21V11M12 21V4M19 21v-6" /></>} />;
+const IconCal = () => <Icon d={<><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M8 3v4M16 3v4M3 10h18" /></>} />;
 const IconPlus = () => <Icon d={<><path d="M12 5v14M5 12h14" /></>} />;
 const IconCheck = () => <Icon d={<path d="M5 13l4 4L19 7" />} />;
 const IconBack = () => <Icon d={<path d="M15 18l-6-6 6-6" />} />;
@@ -152,29 +170,90 @@ function ExerciseLogCard({ item, libEntry, last, loggedToday, onLog, onDeleteLog
   );
 }
 
-function WorkoutTab({ plans, libMap, log, selectedDate, setSelectedDate, onLog, onDeleteLog }) {
-  const [planName, setPlanName] = useState(plans[0]?.name);
-  useEffect(() => { if (!plans.find((p) => p.name === planName)) setPlanName(plans[0]?.name); }, [plans]);
-  const plan = plans.find((p) => p.name === planName);
+function WorkoutTab({ programs, dayIndex, activities, schedule, libMap, log, selectedDate, setSelectedDate, onLog, onDeleteLog }) {
+  const [sel, setSel] = useState({ programId: null, phaseId: null, dayId: null });
+
+  const scheduled = resolveScheduled(schedule, selectedDate);
+  const scheduledDay = scheduled?.plan_id ? dayIndex.get(scheduled.plan_id) : null;
+
+  // Geplanter Tag des gewählten Datums wird automatisch vorgewählt.
+  useEffect(() => {
+    if (scheduledDay) setSel({ programId: scheduledDay.program.id, phaseId: scheduledDay.phase.id, dayId: scheduledDay.id });
+  }, [selectedDate, scheduledDay?.id]);
+
+  // Auswahl reparieren, wenn Programme laden oder Teile gelöscht wurden.
+  useEffect(() => {
+    setSel((s) => {
+      if (s.programId === AKT) return s;
+      const pr = programs.find((p) => p.id === s.programId) || programs[0];
+      if (!pr) return s;
+      const ph = pr.phases.find((p) => p.id === s.phaseId) || pr.phases[0];
+      const day = ph?.days.find((d) => d.id === s.dayId) || ph?.days[0];
+      if (s.programId === pr.id && s.phaseId === (ph?.id || null) && s.dayId === (day?.id || null)) return s;
+      return { programId: pr.id, phaseId: ph?.id || null, dayId: day?.id || null };
+    });
+  }, [programs]);
+
+  const isAkt = sel.programId === AKT;
+  const program = programs.find((p) => p.id === sel.programId);
+  const phase = program?.phases.find((p) => p.id === sel.phaseId);
+  const day = phase?.days.find((d) => d.id === sel.dayId);
+
+  const pickProgram = (pr) => setSel({ programId: pr.id, phaseId: pr.phases[0]?.id || null, dayId: pr.phases[0]?.days[0]?.id || null });
+  const pickPhase = (ph) => setSel((s) => ({ ...s, phaseId: ph.id, dayId: ph.days[0]?.id || null }));
+
+  const schedHint = scheduled
+    ? scheduled.plan_id
+      ? scheduledDay && `Geplant: ${scheduledDay.label}${scheduled.source === 'pattern' ? ' · Wochenmuster' : ''}`
+      : 'Geplant: trainingsfrei'
+    : null;
 
   return (
     <div className="tab-body">
       <input type="date" className="date-input" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
+      {schedHint && <div className="sched-hint">{schedHint}</div>}
       <div className="chips wrap">
-        {plans.map((p) => (
-          <button key={p.name} className={`chip ${p.name === planName ? 'on' : ''}`} onClick={() => setPlanName(p.name)}>{p.name}</button>
+        {programs.map((pr) => (
+          <button key={pr.id} className={`chip ${!isAkt && pr.id === sel.programId ? 'on' : ''}`} onClick={() => pickProgram(pr)}>{pr.name}</button>
         ))}
+        {activities.length > 0 && (
+          <button className={`chip ${isAkt ? 'on' : ''}`} onClick={() => setSel({ programId: AKT, phaseId: null, dayId: null })}>Aktivität</button>
+        )}
       </div>
-      {plan?.notiz && <div className="cue-box">{plan.notiz}</div>}
-      {plan && buildBlocks(plan.items).map((b, bi) => {
+      {!isAkt && program && program.phases.length > 1 && (
+        <div className="chips sub">
+          {program.phases.map((ph) => (
+            <button key={ph.id} className={`chip ${ph.id === sel.phaseId ? 'on' : ''}`} onClick={() => pickPhase(ph)}>{ph.name}</button>
+          ))}
+        </div>
+      )}
+      {!isAkt && phase && phase.days.length > 1 && (
+        <div className="chips sub">
+          {phase.days.map((d) => (
+            <button key={d.id} className={`chip ${d.id === sel.dayId ? 'on' : ''}`} onClick={() => setSel((s) => ({ ...s, dayId: d.id }))}>{d.name}</button>
+          ))}
+        </div>
+      )}
+
+      {isAkt && activities.map((a) => (
+        <ActivityCard key={a} item={{ uebung: a }} last={lastSession(log, a, selectedDate)}
+          onLog={(set) => onLog({ ...set, plan: 'Aktivität', datum: selectedDate })} />
+      ))}
+
+      {!isAkt && phase?.notiz && <div className="cue-box">{phase.notiz}</div>}
+      {!isAkt && day?.notiz && <div className="cue-box">{day.notiz}</div>}
+      {!isAkt && day && buildBlocks(day.items).map((b, bi) => {
         const cards = b.items.map((it, ii) => {
           const key = `${bi}-${ii}-${it.uebung}`;
-          const common = { item: it, last: lastSession(log, it.uebung, selectedDate), onLog: (set) => onLog({ ...set, plan: plan.name, datum: selectedDate, exercise_id: it.exercise_id }) };
-          if (plan.name === 'Aktivität') return <ActivityCard key={key} {...common} />;
+          const dayLabel = dayIndex.get(day.id)?.label || day.name;
           const loggedToday = log
-            .filter((r) => r.uebung === it.uebung && r.datum === selectedDate && r.plan === plan.name)
+            .filter((r) => r.uebung === it.uebung && r.datum === selectedDate && (r.plan_id ? r.plan_id === day.id : r.plan === dayLabel))
             .sort((a, b2) => (parseInt(a.satz) || 0) - (parseInt(b2.satz) || 0));
-          return <ExerciseLogCard key={key} libEntry={libMap.get(it.uebung)} loggedToday={loggedToday} onDeleteLog={onDeleteLog} {...common} />;
+          return (
+            <ExerciseLogCard key={key} item={it} libEntry={libMap.get(it.uebung)} loggedToday={loggedToday} onDeleteLog={onDeleteLog}
+              last={lastSession(log, it.uebung, selectedDate)}
+              onLog={(set) => onLog({ ...set, plan: dayLabel, plan_id: day.id, datum: selectedDate, exercise_id: it.exercise_id })} />
+          );
         });
         if (!b.gruppe) return cards;
         return (
@@ -184,7 +263,9 @@ function WorkoutTab({ plans, libMap, log, selectedDate, setSelectedDate, onLog, 
           </div>
         );
       })}
-      {(!plan || plan.items.length === 0) && <p className="empty">Keine Übungen in diesem Plan.</p>}
+      {!isAkt && (!day || day.items.length === 0) && (
+        <p className="empty">{programs.length === 0 ? 'Noch keine Pläne angelegt — im Tab „Pläne" starten.' : 'Keine Übungen an diesem Tag.'}</p>
+      )}
     </div>
   );
 }
@@ -264,9 +345,9 @@ function PlanEditor({ plan, library, onSave, onCancel }) {
     <div className="tab-body">
       <div className="editor-top">
         <button className="icon-btn" onClick={onCancel}><IconBack /></button>
-        <input className="in flex" value={name} onChange={(e) => setName(e.target.value)} placeholder="Planname" />
+        <input className="in flex" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name des Tages (z.B. Tag 1)" />
       </div>
-      <textarea className="in note-in" rows={2} value={notiz} onChange={(e) => setNotiz(e.target.value)} placeholder="Notiz zum Plan…" />
+      <textarea className="in note-in" rows={2} value={notiz} onChange={(e) => setNotiz(e.target.value)} placeholder="Notiz zu diesem Tag…" />
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
         <SortableContext items={items.map((x) => x._id)} strategy={verticalListSortingStrategy}>
           {(() => {
@@ -283,26 +364,227 @@ function PlanEditor({ plan, library, onSave, onCancel }) {
       </DndContext>
       <button className="add-set" onClick={() => setPicking(true)}><IconPlus /> Übung hinzufügen</button>
       <button className="btn-primary" disabled={!name || saving} onClick={async () => { setSaving(true); try { await onSave({ id: plan?.id, name, notiz, items }); } catch (e) { alert(e.message); setSaving(false); } }}>
-        {saving ? 'Speichern…' : 'Plan speichern'}
+        {saving ? 'Speichern…' : 'Tag speichern'}
       </button>
     </div>
   );
 }
 
-function PlansTab({ plans, library, onSave, onDelete }) {
-  const [editing, setEditing] = useState(null); // {plan} | {new:true}
-  if (editing) return <PlanEditor plan={editing.plan} library={library} onCancel={() => setEditing(null)} onSave={async (p) => { await onSave(p); setEditing(null); }} />;
+// Kleiner Name/Notiz-Editor für Programme und Phasen.
+function MetaEditor({ title, initial, placeholder, onSave, onCancel, onDelete, deleteLabel, confirmText }) {
+  const [name, setName] = useState(initial?.name || '');
+  const [notiz, setNotiz] = useState(initial?.notiz || '');
+  const [saving, setSaving] = useState(false);
   return (
     <div className="tab-body">
-      {plans.map((p) => (
-        <div className="card list-card" key={p.id}>
-          <div onClick={() => setEditing({ plan: p })} className="list-main">
-            <h3>{p.name}</h3><span className="muted">{p.items.length} Übungen</span>
-          </div>
-          <button className="icon-btn ghost" onClick={() => { if (confirm(`Plan "${p.name}" löschen?`)) onDelete(p.id); }}><IconTrash /></button>
+      <div className="editor-top"><button className="icon-btn" onClick={onCancel}><IconBack /></button><h2>{title}</h2></div>
+      <input className="in flex" value={name} onChange={(e) => setName(e.target.value)} placeholder={placeholder} autoFocus />
+      <textarea className="in note-in" rows={2} value={notiz} onChange={(e) => setNotiz(e.target.value)} placeholder="Notiz…" />
+      <button className="btn-primary" disabled={!name || saving}
+        onClick={async () => { setSaving(true); try { await onSave({ name, notiz }); } catch (e) { alert(e.message); setSaving(false); } }}>
+        {saving ? 'Speichern…' : 'Speichern'}
+      </button>
+      {onDelete && (
+        <button className="btn-text-danger" onClick={() => { if (confirm(confirmText)) onDelete(); }}>{deleteLabel}</button>
+      )}
+    </div>
+  );
+}
+
+function PlansTab({ programs, library, onSaveProgram, onDeleteProgram, onSavePhase, onDeletePhase, onSaveDay, onDeleteDay }) {
+  // nav: {view:'list'} | {view:'program',programId} | {view:'editProgram',program|null}
+  //    | {view:'editPhase',programId,phase|null} | {view:'day',programId,phaseId,day|null}
+  const [nav, setNav] = useState({ view: 'list' });
+  const program = programs.find((p) => p.id === nav.programId);
+
+  if (nav.view === 'editProgram') {
+    return (
+      <MetaEditor
+        title={nav.program ? 'Plan bearbeiten' : 'Neuer Plan'}
+        initial={nav.program} placeholder="Name des Plans (z.B. DGR UB)"
+        onCancel={() => setNav(nav.program ? { view: 'program', programId: nav.program.id } : { view: 'list' })}
+        onSave={async (d) => { await onSaveProgram({ id: nav.program?.id, ...d }); setNav(nav.program ? { view: 'program', programId: nav.program.id } : { view: 'list' }); }}
+        onDelete={nav.program ? async () => { await onDeleteProgram(nav.program.id); setNav({ view: 'list' }); } : null}
+        deleteLabel="Plan löschen" confirmText={`Plan "${nav.program?.name}" mit allen Phasen und Tagen löschen?`}
+      />
+    );
+  }
+
+  if (nav.view === 'editPhase') {
+    const prog = programs.find((p) => p.id === nav.programId);
+    return (
+      <MetaEditor
+        title={nav.phase ? 'Phase bearbeiten' : 'Neue Phase'}
+        initial={nav.phase} placeholder="Name der Phase (z.B. Phase 1)"
+        onCancel={() => setNav({ view: 'program', programId: nav.programId })}
+        onSave={async (d) => {
+          await onSavePhase({ id: nav.phase?.id, program_id: nav.programId, ...d, position: nav.phase ? undefined : (prog?.phases.length || 0) + 1 });
+          setNav({ view: 'program', programId: nav.programId });
+        }}
+        onDelete={nav.phase ? async () => { await onDeletePhase(nav.phase.id); setNav({ view: 'program', programId: nav.programId }); } : null}
+        deleteLabel="Phase löschen" confirmText={`Phase "${nav.phase?.name}" mit allen Tagen löschen?`}
+      />
+    );
+  }
+
+  if (nav.view === 'day') {
+    const prog = programs.find((p) => p.id === nav.programId);
+    const phase = prog?.phases.find((ph) => ph.id === nav.phaseId);
+    return (
+      <PlanEditor plan={nav.day} library={library}
+        onCancel={() => setNav({ view: 'program', programId: nav.programId })}
+        onSave={async (p) => {
+          await onSaveDay({ ...p, phase_id: nav.phaseId, position: nav.day ? undefined : (phase?.days.length || 0) + 1 });
+          setNav({ view: 'program', programId: nav.programId });
+        }} />
+    );
+  }
+
+  if (nav.view === 'program' && program) {
+    return (
+      <div className="tab-body">
+        <div className="editor-top">
+          <button className="icon-btn" onClick={() => setNav({ view: 'list' })}><IconBack /></button>
+          <h2>{program.name}</h2>
+          <button className="icon-btn ghost" onClick={() => setNav({ view: 'editProgram', program })}>✎</button>
         </div>
-      ))}
-      <button className="btn-primary" onClick={() => setEditing({ plan: null })}><IconPlus /> Neuer Plan</button>
+        {program.notiz && <div className="cue-box">{program.notiz}</div>}
+        {program.phases.map((ph) => (
+          <div className="phase-block" key={ph.id}>
+            <div className="phase-head">
+              <span className="eyebrow">{ph.name}</span>
+              <button className="phase-edit" onClick={() => setNav({ view: 'editPhase', programId: program.id, phase: ph })}>✎</button>
+            </div>
+            {ph.notiz && <div className="cue-box">{ph.notiz}</div>}
+            {ph.days.map((d) => (
+              <div className="card list-card" key={d.id}>
+                <div className="list-main" onClick={() => setNav({ view: 'day', programId: program.id, phaseId: ph.id, day: d })}>
+                  <h3>{d.name}</h3><span className="muted">{d.items.length} Übungen</span>
+                </div>
+                <button className="icon-btn ghost" onClick={() => { if (confirm(`Tag "${d.name}" löschen?`)) onDeleteDay(d.id); }}><IconTrash /></button>
+              </div>
+            ))}
+            <button className="add-set" onClick={() => setNav({ view: 'day', programId: program.id, phaseId: ph.id, day: null })}><IconPlus /> Tag hinzufügen</button>
+          </div>
+        ))}
+        <button className="btn-primary" onClick={() => setNav({ view: 'editPhase', programId: program.id, phase: null })}><IconPlus /> Neue Phase</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="tab-body">
+      {programs.map((pr) => {
+        const dayCount = pr.phases.reduce((n, ph) => n + ph.days.length, 0);
+        return (
+          <div className="card list-card" key={pr.id}>
+            <div className="list-main" onClick={() => setNav({ view: 'program', programId: pr.id })}>
+              <h3>{pr.name}</h3>
+              <span className="muted">{pr.phases.length} {pr.phases.length === 1 ? 'Phase' : 'Phasen'} · {dayCount} Tage</span>
+            </div>
+          </div>
+        );
+      })}
+      {programs.length === 0 && <p className="empty">Noch keine Pläne angelegt.</p>}
+      <button className="btn-primary" onClick={() => setNav({ view: 'editProgram', program: null })}><IconPlus /> Neuer Plan</button>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PLANUNG TAB (Wochenansicht + Wochenmuster)
+// ═══════════════════════════════════════════════════════════════
+function DayPicker({ programs, title, allowReset, onPick, onCancel }) {
+  return (
+    <div className="tab-body">
+      <div className="editor-top"><button className="icon-btn" onClick={onCancel}><IconBack /></button><h2>{title}</h2></div>
+      <button className="pick-row" onClick={() => onPick(null)}><span>Trainingsfrei</span></button>
+      {allowReset && <button className="pick-row" onClick={() => onPick('reset')}><span>Zurücksetzen</span><span className="muted">Wochenmuster gilt wieder</span></button>}
+      {programs.map((pr) => pr.phases.map((ph) => ph.days.length > 0 && (
+        <div className="picker-group" key={ph.id}>
+          <span className="eyebrow">{pr.name} · {ph.name}</span>
+          {ph.days.map((d) => (
+            <button key={d.id} className="pick-row" onClick={() => onPick(d.id)}>
+              <span>{d.name}</span><span className="muted">{d.items.length} Übungen</span>
+            </button>
+          ))}
+        </div>
+      )))}
+    </div>
+  );
+}
+
+function PlanungTab({ programs, dayIndex, schedule, onSetEntry, onClearEntry, onSetPattern }) {
+  const [weekOff, setWeekOff] = useState(0);
+  const [picker, setPicker] = useState(null); // {type:'date',datum} | {type:'pattern',weekday}
+  const [busy, setBusy] = useState(false);
+
+  const today = isoDate(new Date());
+  const monday = addDays(mondayOf(today), weekOff * 7);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+
+  if (picker) {
+    const isDate = picker.type === 'date';
+    return (
+      <DayPicker programs={programs}
+        title={isDate ? fmtDate(picker.datum) : `Jeden ${WD_LONG[picker.weekday]}`}
+        allowReset={isDate && schedule.entries.some((e) => e.datum === picker.datum)}
+        onCancel={() => setPicker(null)}
+        onPick={async (v) => {
+          if (busy) return;
+          setBusy(true);
+          try {
+            if (isDate) {
+              if (v === 'reset') await onClearEntry(picker.datum);
+              else await onSetEntry(picker.datum, v);
+            } else await onSetPattern(picker.weekday, v);
+            setPicker(null);
+          } catch (e) { alert(e.message); }
+          setBusy(false);
+        }} />
+    );
+  }
+
+  return (
+    <div className="tab-body">
+      <div className="week-nav">
+        <button className="icon-btn" onClick={() => setWeekOff((n) => n - 1)}><IconBack /></button>
+        <div className="week-label">
+          <span className="eyebrow">Woche</span>
+          <strong>{shortDay(monday)} – {shortDay(days[6])}</strong>
+          {weekOff !== 0 && <button className="today-btn" onClick={() => setWeekOff(0)}>zur aktuellen Woche</button>}
+        </div>
+        <button className="icon-btn flip" onClick={() => setWeekOff((n) => n + 1)}><IconBack /></button>
+      </div>
+
+      {days.map((iso, wd) => {
+        const res = resolveScheduled(schedule, iso);
+        let text = '—', cls = '';
+        if (res) {
+          if (res.plan_id) { text = dayIndex.get(res.plan_id)?.label || 'Gelöschter Tag'; cls = 'set'; }
+          else { text = 'Trainingsfrei'; cls = 'free'; }
+        }
+        return (
+          <button className={`sched-row ${iso === today ? 'today' : ''}`} key={iso} onClick={() => setPicker({ type: 'date', datum: iso })}>
+            <span className="sched-day">{WD[wd]}<em>{shortDay(iso)}</em></span>
+            <span className={`sched-val ${cls}`}>{text}</span>
+            {res && <span className="sched-src">{res.source === 'entry' ? 'fest' : 'Muster'}</span>}
+          </button>
+        );
+      })}
+
+      <div className="panel">
+        <div className="panel-head"><span className="eyebrow">Wochenmuster</span><span className="muted">Standard je Wochentag</span></div>
+        {WD_LONG.map((w, wd) => {
+          const p = schedule.pattern.find((x) => x.weekday === wd);
+          return (
+            <button className="sched-row plain" key={wd} onClick={() => setPicker({ type: 'pattern', weekday: wd })}>
+              <span className="sched-day">{WD[wd]}</span>
+              <span className={`sched-val ${p ? 'set' : ''}`}>{p ? (dayIndex.get(p.plan_id)?.label || 'Gelöschter Tag') : '—'}</span>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -534,7 +816,8 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lib, setLib] = useState([]);
-  const [plans, setPlans] = useState([]);
+  const [programs, setPrograms] = useState([]);
+  const [schedule, setSchedule] = useState({ entries: [], pattern: [] });
   const [log, setLog] = useState([]);
   const [tab, setTab] = useState('dashboard');
   const [selectedDate, setSelectedDate] = useState(isoDate(new Date()));
@@ -549,8 +832,8 @@ export default function App() {
   const loadAll = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const [l, p, g] = await Promise.all([getExercises(), getPlans(), getLog()]);
-      setLib(l); setPlans(p); setLog(g);
+      const [l, p, g, sch] = await Promise.all([getExercises(), getPrograms(), getLog(), getSchedule()]);
+      setLib(l); setPrograms(p); setLog(g); setSchedule(sch);
     } catch (e) { setError(e.message); } finally { setLoading(false); }
   }, []);
 
@@ -558,12 +841,15 @@ export default function App() {
   useEffect(() => { if (uid) loadAll(); }, [uid, loadAll]);
 
   const libMap = useMemo(() => new Map(lib.map((l) => [l.uebung, l])), [lib]);
-  const workoutPlans = useMemo(() => {
-    const base = [...plans];
-    const acts = [...new Set(log.filter((r) => r.plan === 'Aktivität').map((r) => r.uebung))];
-    if (acts.length) base.push({ name: 'Aktivität', items: acts.map((a) => ({ uebung: a })) });
-    return base;
-  }, [plans, log]);
+  // Tag-ID → Tag inkl. Programm/Phase-Referenz und vollem Anzeige-Label.
+  const dayIndex = useMemo(() => {
+    const m = new Map();
+    programs.forEach((pr) => pr.phases.forEach((ph) => ph.days.forEach((d) => {
+      m.set(d.id, { ...d, program: pr, phase: ph, label: `${pr.name} · ${ph.name} · ${d.name}` });
+    })));
+    return m;
+  }, [programs]);
+  const activities = useMemo(() => [...new Set(log.filter((r) => r.plan === 'Aktivität').map((r) => r.uebung))], [log]);
   // ── Mutations ──
   const handleLog = async (row) => {
     const saved = await addLogRow(row);
@@ -573,8 +859,18 @@ export default function App() {
     await deleteLogRow(id);
     setLog((prev) => prev.filter((r) => r.id !== id));
   };
-  const handleSavePlan = async (p) => { await savePlan(p); setPlans(await getPlans()); };
-  const handleDeletePlan = async (id) => { await deletePlan(id); setPlans(await getPlans()); };
+  const refreshPrograms = async () => setPrograms(await getPrograms());
+  const refreshSchedule = async () => setSchedule(await getSchedule());
+  const handleSaveProgram = async (p) => { await saveProgram(p); await refreshPrograms(); };
+  const handleSavePhase = async (p) => { await savePhase(p); await refreshPrograms(); };
+  const handleSaveDay = async (p) => { await savePlan(p); await refreshPrograms(); };
+  // Löschen kaskadiert in der DB bis in Schedule-Einträge → beide States auffrischen.
+  const handleDeleteProgram = async (id) => { await deleteProgram(id); await Promise.all([refreshPrograms(), refreshSchedule()]); };
+  const handleDeletePhase = async (id) => { await deletePhase(id); await Promise.all([refreshPrograms(), refreshSchedule()]); };
+  const handleDeleteDay = async (id) => { await deletePlan(id); await Promise.all([refreshPrograms(), refreshSchedule()]); };
+  const handleSetEntry = async (datum, planId) => { await setScheduleEntry(datum, planId); await refreshSchedule(); };
+  const handleClearEntry = async (datum) => { await clearScheduleEntry(datum); await refreshSchedule(); };
+  const handleSetPattern = async (weekday, planId) => { await setPatternDay(weekday, planId); await refreshSchedule(); };
   const handleAddLib = async (e) => {
     const saved = await addExercise(e);
     setLib((prev) => [...prev, saved].sort((a, b) => a.uebung.localeCompare(b.uebung)));
@@ -582,14 +878,14 @@ export default function App() {
   const handleUpdateLib = async (id, d) => {
     const saved = await updateExercise(id, d);
     setLib((prev) => prev.map((x) => (x.id === id ? saved : x)).sort((a, b) => a.uebung.localeCompare(b.uebung)));
-    if ('uebung' in d) setPlans(await getPlans()); // name change must propagate to cached plan items
+    if ('uebung' in d) setPrograms(await getPrograms()); // name change must propagate to cached plan items
   };
   const handleDeleteLib = async (id) => {
     await deleteExercise(id);
     setLib((prev) => prev.filter((x) => x.id !== id));
   };
   const handleExport = async () => {
-    try { await exportToExcel({ exercises: lib, plans, log }); }
+    try { await exportToExcel({ exercises: lib, plans: [...dayIndex.values()].map((d) => ({ name: d.label, items: d.items })), log }); }
     catch (e) { alert('Export fehlgeschlagen: ' + e.message); }
   };
 
@@ -601,7 +897,7 @@ export default function App() {
     <div className="center"><div className="glass auth"><h1>Fehler</h1><p className="err">{error}</p><button className="btn-primary" onClick={loadAll}>Erneut versuchen</button></div></div>
   );
 
-  const titles = { workout: 'Workout', dashboard: 'Übersicht', plans: 'Pläne', library: 'Bibliothek' };
+  const titles = { workout: 'Workout', dashboard: 'Übersicht', planung: 'Planung', plans: 'Pläne', library: 'Bibliothek' };
   return (
     <div className="app">
       <header className="topbar glass">
@@ -613,15 +909,17 @@ export default function App() {
       </header>
 
       <main className="main">
-        {tab === 'workout' && <WorkoutTab plans={workoutPlans} libMap={libMap} log={log} selectedDate={selectedDate} setSelectedDate={setSelectedDate} onLog={handleLog} onDeleteLog={handleDeleteLog} />}
+        {tab === 'workout' && <WorkoutTab programs={programs} dayIndex={dayIndex} activities={activities} schedule={schedule} libMap={libMap} log={log} selectedDate={selectedDate} setSelectedDate={setSelectedDate} onLog={handleLog} onDeleteLog={handleDeleteLog} />}
         {tab === 'dashboard' && <DashboardTab log={log} />}
-        {tab === 'plans' && <PlansTab plans={plans} library={lib} onSave={handleSavePlan} onDelete={handleDeletePlan} />}
+        {tab === 'planung' && <PlanungTab programs={programs} dayIndex={dayIndex} schedule={schedule} onSetEntry={handleSetEntry} onClearEntry={handleClearEntry} onSetPattern={handleSetPattern} />}
+        {tab === 'plans' && <PlansTab programs={programs} library={lib} onSaveProgram={handleSaveProgram} onDeleteProgram={handleDeleteProgram} onSavePhase={handleSavePhase} onDeletePhase={handleDeletePhase} onSaveDay={handleSaveDay} onDeleteDay={handleDeleteDay} />}
         {tab === 'library' && <LibraryTab library={lib} onAdd={handleAddLib} onUpdate={handleUpdateLib} onDelete={handleDeleteLib} />}
       </main>
 
       <nav className="tabbar glass">
         <button className={tab === 'dashboard' ? 'on' : ''} onClick={() => setTab('dashboard')}><IconChart /><span>Übersicht</span></button>
         <button className={tab === 'workout' ? 'on' : ''} onClick={() => setTab('workout')}><IconDumbbell /><span>Workout</span></button>
+        <button className={tab === 'planung' ? 'on' : ''} onClick={() => setTab('planung')}><IconCal /><span>Planung</span></button>
         <button className={tab === 'plans' ? 'on' : ''} onClick={() => setTab('plans')}><IconPlan /><span>Pläne</span></button>
         <button className={tab === 'library' ? 'on' : ''} onClick={() => setTab('library')}><IconBook /><span>Bibliothek</span></button>
       </nav>
