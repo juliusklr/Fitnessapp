@@ -29,12 +29,23 @@ jobs:
           "$HOME/ciq-bin/connect-iq-sdk-manager" --help || true
 
       - name: Download SDK and device files
+        env:
+          GARMIN_EMAIL: ${{ secrets.GARMIN_EMAIL }}
+          GARMIN_PASSWORD: ${{ secrets.GARMIN_PASSWORD }}
         run: |
           set -x
           MGR="$HOME/ciq-bin/connect-iq-sdk-manager"
           "$MGR" agreement accept
-          "$MGR" sdk list || true
           "$MGR" sdk set '>=6.0.0'
+          # device files are behind a Garmin SSO login (same as the official SDK manager)
+          if [ -z "$GARMIN_EMAIL" ] || [ -z "$GARMIN_PASSWORD" ]; then
+            echo "::error::Secrets GARMIN_EMAIL / GARMIN_PASSWORD fehlen — Garmin-Konto-Login ist für den Download der Gerätedateien nötig (Repo Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          "$MGR" login --help || true
+          "$MGR" login --username "$GARMIN_EMAIL" --password "$GARMIN_PASSWORD" \
+            || { echo "flag variant 1 failed, trying env/stdin variants"; \
+                 CONNECT_IQ_USERNAME="$GARMIN_EMAIL" CONNECT_IQ_PASSWORD="$GARMIN_PASSWORD" "$MGR" login; }
           "$MGR" device download -m garmin/manifest.xml
           find "$HOME/.Garmin" -maxdepth 4 | head -50 || true
 
