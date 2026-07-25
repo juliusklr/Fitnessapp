@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<resources>
+    <settings>
+        <setting propertyKey="@Properties.Email" title="@Strings.EmailTitle">
+            <settingConfig type="alphaNumeric"/>
+        </setting>
+        <setting propertyKey="@Properties.Password" title="@Strings.PasswordTitle">
+            <settingConfig type="alphaNumeric"/>
+        </setting>
+    </settings>
+</resources>

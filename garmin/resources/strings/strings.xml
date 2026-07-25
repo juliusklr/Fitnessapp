@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<resources>
+    <strings>
+        <string id="AppName">Training</string>
+        <string id="EmailTitle">Supabase E-Mail</string>
+        <string id="PasswordTitle">Supabase Passwort</string>
+    </strings>
+</resources>

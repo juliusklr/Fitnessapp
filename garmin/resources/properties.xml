@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<resources>
+    <properties>
+        <property id="SupabaseUrl" type="string">https://kxefekyuukmoyjcfoqhe.supabase.co</property>
+        <property id="SupabaseKey" type="string">sb_publishable_zjALXihtEoD3i1WDGL8MFQ_yo9dSnwo</property>
+        <property id="Email" type="string">__SUPABASE_EMAIL__</property>
+        <property id="Password" type="string">__SUPABASE_PASSWORD__</property>
+    </properties>
+</resources>
