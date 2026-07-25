@@ -22,24 +22,11 @@ jobs:
         run: |
           set -x
           mkdir -p "$HOME/ciq-bin"
-          cd "$HOME/ciq-bin"
-          ok=""
-          for url in \
-            "https://github.com/lindell/connect-iq-sdk-manager-cli/releases/latest/download/connect-iq-sdk-manager-cli_Linux_x86_64.tar.gz" \
-            "https://github.com/lindell/connect-iq-sdk-manager-cli/releases/latest/download/connect-iq-sdk-manager_Linux_x86_64.tar.gz"; do
-            if curl -fsSL "$url" -o cli.tar.gz; then ok=1; break; fi
-          done
-          if [ -z "$ok" ]; then
-            curl -fsSL https://raw.githubusercontent.com/lindell/connect-iq-sdk-manager-cli/master/install.sh | sh -s -- -b "$HOME/ciq-bin" || true
-          else
-            tar xzf cli.tar.gz
-          fi
-          ls -la
-          BIN=$(find . -maxdepth 1 -type f -name 'connect-iq-sdk-manager*' ! -name '*.tar.gz' | head -1)
-          chmod +x "$BIN"
+          curl -fsSL https://raw.githubusercontent.com/lindell/connect-iq-sdk-manager-cli/master/install.sh | sh -s -- -b "$HOME/ciq-bin"
+          ls -la "$HOME/ciq-bin"
           echo "$HOME/ciq-bin" >> "$GITHUB_PATH"
           # dump help so failures in later steps are debuggable from the log
-          "$BIN" --help || true
+          "$HOME/ciq-bin/connect-iq-sdk-manager" --help || true
 
       - name: Download SDK and device files
         run: |
